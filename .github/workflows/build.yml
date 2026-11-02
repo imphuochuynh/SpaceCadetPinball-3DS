@@ -8,50 +8,41 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm:latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install 3DS libraries
-        run: |
-          # The devkitarm image usually ships these already; only hit the
-          # package server (which sometimes refuses CI runners) if missing.
-          dkp-pacman -Q 3ds-sdl 3ds-sdl_mixer 3ds-libvorbisidec 3ds-libmad 3ds-libmikmod citro3d || {
-            dkp-pacman -Sy --noconfirm &&
-            dkp-pacman -S --needed --noconfirm 3ds-sdl 3ds-sdl_mixer
-          }
-          ls "$DEVKITPRO/portlibs/3ds/lib" | head -50
-
-      - name: Install CIA tools (makerom, bannertool)
+      - name: Download CIA tools (makerom, bannertool)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get update -qq && apt-get install -y -qq curl jq unzip >/dev/null
-          mkdir -p /tmp/tools "$DEVKITPRO/tools/bin"
-
+          mkdir -p /tmp/dl .tools
           # Find a release asset by name pattern, so version bumps don't break the build
           asset_url() {
             curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$1/releases/latest" \
               | jq -r --arg re "$2" '.assets[] | select(.name | test($re; "i")) | .browser_download_url' | head -n1
           }
+          curl -fsSL "$(asset_url 3DSGuy/Project_CTR 'makerom.*ubuntu.*\.zip$')" -o /tmp/dl/makerom.zip
+          curl -fsSL "$(asset_url Epicpkmn11/bannertool 'bannertool.*\.zip$')" -o /tmp/dl/bannertool.zip
+          unzip -o -q /tmp/dl/makerom.zip -d /tmp/dl/makerom
+          unzip -o -q /tmp/dl/bannertool.zip -d /tmp/dl/bannertool
+          install -m755 "$(find /tmp/dl/makerom -type f -name makerom | head -n1)" .tools/makerom
+          install -m755 "$(find /tmp/dl/bannertool -type f -path '*linux*x86_64*' -name bannertool | head -n1)" .tools/bannertool
+          chmod +x .github/record-makerom.sh
 
-          url=$(asset_url 3DSGuy/Project_CTR 'makerom.*ubuntu.*\.zip$')
-          echo "makerom: $url"
-          curl -fsSL "$url" -o /tmp/tools/makerom.zip
-          unzip -o -q /tmp/tools/makerom.zip -d /tmp/tools/makerom
+      - name: Compile in devkitARM container
+        run: |
+          docker run --rm -v "$PWD":"$PWD" -w "$PWD" devkitpro/devkitarm:latest bash -c '
+            set -e
+            dkp-pacman -Q 3ds-sdl 3ds-sdl_mixer || { dkp-pacman -Sy --noconfirm && dkp-pacman -S --needed --noconfirm 3ds-sdl 3ds-sdl_mixer; }
+            make -j"$(nproc)" BUILD_CIA=1 TOOLDIR="$PWD/.tools" MAKEROM="$PWD/.github/record-makerom.sh"
+          '
 
-          url=$(asset_url Epicpkmn11/bannertool 'bannertool.*\.zip$')
-          echo "bannertool: $url"
-          curl -fsSL "$url" -o /tmp/tools/bannertool.zip
-          unzip -o -q /tmp/tools/bannertool.zip -d /tmp/tools/bannertool
-
-          install -m755 "$(find /tmp/tools/makerom -type f -name makerom | head -n1)" "$DEVKITPRO/tools/bin/makerom"
-          install -m755 "$(find /tmp/tools/bannertool -type f -path '*linux*x86_64*' -name bannertool | head -n1)" "$DEVKITPRO/tools/bin/bannertool"
-          "$DEVKITPRO/tools/bin/makerom" -version || true
-
-      - name: Build .3dsx and .cia
-        run: make -j"$(nproc)" BUILD_CIA=1
+      - name: Package CIA on host
+        run: |
+          sudo chown -R "$(id -u)" .
+          eval ".tools/makerom $(cat makerom.args)"
+          ls -la SpaceCadetPinball.cia SpaceCadetPinball.3dsx
 
       - name: Upload build
         uses: actions/upload-artifact@v4

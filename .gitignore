@@ -285,3 +285,7 @@ romfs/*
 *.cia
 *.smdh
 *.bnr
+
+# CI
+.tools/
+makerom.args
