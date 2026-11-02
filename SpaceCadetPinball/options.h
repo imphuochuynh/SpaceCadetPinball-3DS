@@ -81,6 +81,8 @@ public:
 	static void set_float(LPCSTR lpValueName, float data);
 	static void toggle(Menu1 uIDCheckItem);
 	static void KeyDown(int key);
+	static void load();
+	static bool save();
 private:
 	static std::map<std::string, std::string> settings;
 	static ControlsStruct RebindControls;

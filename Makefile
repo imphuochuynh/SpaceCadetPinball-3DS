@@ -34,7 +34,7 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+TARGET		:=	SpaceCadetPinball
 BUILD		:=	build
 SOURCES		:=	SpaceCadetPinball
 DATA		:=	data
@@ -43,14 +43,14 @@ GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 #ROMFS		:=	romfs
 #GFXBUILD	:=	$(ROMFS)/gfx
-APP_TITLE	:= 3D Pinball - Space Cadet
-APP_DESCRIPTION := 3D Pinball - Space Cadet for Nintendo 3DS
-APP_AUTHOR	:= k4zmu2a / MaikelChan
+APP_TITLE	:= Space Cadet Pinball
+APP_DESCRIPTION := Space Cadet Pinball with menu, saves and high scores
+APP_AUTHOR	:= k4zmu2a / MaikelChan / imphuoc
 
-APP_PRODUCT_CODE	:=	CTR-P-PINBALL
-APP_UNIQUE_ID		:=	0x21A39
+APP_PRODUCT_CODE	:=	CTR-P-SCPB
+APP_UNIQUE_ID		:=	0x5CADE
 APP_VERSION_MAJOR	:=	0
-APP_VERSION_MINOR	:=	6
+APP_VERSION_MINOR	:=	7
 APP_VERSION_MICRO	:=	0
 
 RSF					:=	$(TOPDIR)/ctr/template.rsf

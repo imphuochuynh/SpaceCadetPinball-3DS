@@ -23,8 +23,57 @@ const ControlRef options::Controls[6]
 };
 
 
+// Settings and high scores are kept in a small key=value file on the SD card,
+// so they survive closing the app. Fixed path, because BasePath can be romfs.
+static const char *SettingsPath = "sdmc:/3ds/SpaceCadetPinball/settings.ini";
+static const char *SettingsTempPath = "sdmc:/3ds/SpaceCadetPinball/settings.tmp";
+
+void options::load()
+{
+	FILE *file = fopen(SettingsPath, "r");
+	if (!file)
+		return;
+
+	char line[256];
+	while (fgets(line, sizeof line, file))
+	{
+		std::string entry(line);
+		while (!entry.empty() && (entry.back() == '\n' || entry.back() == '\r'))
+			entry.pop_back();
+
+		auto separator = entry.find('=');
+		if (separator == std::string::npos || separator == 0)
+			continue;
+
+		settings[entry.substr(0, separator)] = entry.substr(separator + 1);
+	}
+	fclose(file);
+}
+
+bool options::save()
+{
+	// Write to a temp file first, then swap it in, so a crash or power-off
+	// mid-write can't wipe the high score table.
+	FILE *file = fopen(SettingsTempPath, "w");
+	if (!file)
+		return false;
+
+	for (const auto &setting : settings)
+		fprintf(file, "%s=%s\n", setting.first.c_str(), setting.second.c_str());
+
+	bool ok = fflush(file) == 0;
+	ok = fclose(file) == 0 && ok;
+	if (!ok)
+		return false;
+
+	remove(SettingsPath);
+	return rename(SettingsTempPath, SettingsPath) == 0;
+}
+
 void options::init()
 {
+	load();
+
 	Options.KeyDft.LeftFlipper = 0;
 	Options.KeyDft.RightFlipper = 0;
 	Options.KeyDft.Plunger = 0;

@@ -206,7 +206,8 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	printf("Uninitializing...");
 
 	options::uninit();
-	pb::uninit();
+	pb::uninit(); // writes the high score table into the settings
+	options::save();
 	midi::music_shutdown();
 	Sound::Close();
 
