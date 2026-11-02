@@ -17,5 +17,5 @@ public:
 
 	// x: left edge of the text column; everything right of it belongs to the UI.
 	static void DrawBottom(C3D_RenderTarget *target, float x, const high_score_struct *table,
-	                       const char *cameraMode, bool paused);
+	                       const char *cameraMode);
 };

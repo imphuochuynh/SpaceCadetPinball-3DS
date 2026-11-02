@@ -13,7 +13,6 @@ static const u32 ColorName = C2D_Color32(0xE8, 0xE8, 0xF0, 0xFF);
 static const u32 ColorScore = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF);
 static const u32 ColorDim = C2D_Color32(0x7A, 0x80, 0x90, 0xFF);
 static const u32 ColorRule = C2D_Color32(0x2C, 0x32, 0x40, 0xFF);
-static const u32 ColorPaused = C2D_Color32(0xFF, 0xD2, 0x4A, 0xFF);
 
 void n3ds_ui::Initialize()
 {
@@ -59,7 +58,7 @@ static void DrawText(const char *str, float x, float y, float scale, u32 color, 
 }
 
 void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_struct *table,
-                         const char *cameraMode, bool paused)
+                         const char *cameraMode)
 {
 	C2D_TextBufClear(textBuf);
 	C2D_Prepare();
@@ -93,8 +92,7 @@ void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_str
 	}
 
 	C2D_DrawRectSolid(left, 201.0f, 0.5f, width, 1.0f, ColorRule);
-	if (paused)
-		DrawText("PAUSED", left, 204.0f, 0.5f, ColorPaused, width);
+	DrawText("START  Menu", left, 206.0f, 0.42f, ColorDim, width); // also a tap target
 
 	char cam[48];
 	snprintf(cam, sizeof cam, "SELECT  %s", cameraMode);

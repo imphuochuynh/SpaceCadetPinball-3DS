@@ -4,6 +4,7 @@
 #include "control.h"
 #include "fullscrn.h"
 #include "high_score.h"
+#include "n3ds_controls.h"
 #include "pinball.h"
 #include "proj.h"
 #include "render.h"
@@ -365,30 +366,30 @@ void pb::keyup(uint32_t buttons)
 	if (game_mode != 1 || winmain::single_step || demo_mode)
 		return;
 
-	if (buttons & KEY_L)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::LeftFlipper))
 	{
 		MainTable->Message(1001, time_now);
 	}
 
-	if (buttons & KEY_R)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::RightFlipper))
 	{
 		MainTable->Message(1003, time_now);
 	}
 
-	if (buttons & KEY_A)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::Plunger))
 	{
 		MainTable->Message(1005, time_now);
 	}
 
-	if (buttons & KEY_DRIGHT)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeRight))
 	{
 		nudge::un_nudge_right(0, nullptr);
 	}
-	else if (buttons & KEY_DLEFT)
+	else if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeLeft))
 	{
 		nudge::un_nudge_left(0, nullptr);
 	}
-	else if (buttons & KEY_DUP)
+	else if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeUp))
 	{
 		nudge::un_nudge_up(0, nullptr);
 	}
@@ -407,34 +408,34 @@ void pb::keydown(uint32_t buttons)
 
 	// control::pbctrl_bdoor_controller(static_cast<char>(key));
 
-	if (buttons & KEY_L)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::LeftFlipper))
 	{
 		MainTable->Message(1000, time_now);
 	}
 
-	if (buttons & KEY_R)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::RightFlipper))
 	{
 		MainTable->Message(1002, time_now);
 	}
 
-	if (buttons & KEY_A)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::Plunger))
 	{
 		MainTable->Message(1004, time_now);
 	}
 
-	if (buttons & KEY_DRIGHT)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeRight))
 	{
 		if (!MainTable->TiltLockFlag)
 			nudge::nudge_right();
 	}
 
-	if (buttons & KEY_DLEFT)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeLeft))
 	{
 		if (!MainTable->TiltLockFlag)
 			nudge::nudge_left();
 	}
 
-	if (buttons & KEY_DUP)
+	if (buttons & n3ds_controls::Mask(n3ds_controls::NudgeUp))
 	{
 		if (!MainTable->TiltLockFlag)
 			nudge::nudge_up();

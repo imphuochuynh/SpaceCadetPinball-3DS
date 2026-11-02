@@ -15,6 +15,8 @@
 #include "n3ds_camera.h"
 #include "n3ds_ui.h"
 #include "n3ds_initials.h"
+#include "n3ds_menu.h"
+#include "n3ds_controls.h"
 #include "high_score.h"
 #include "proj.h"
 #include "TBall.h"
@@ -42,6 +44,9 @@ double winmain::UpdateToFrameRatio;
 winmain::DurationMs winmain::TargetFrameTime;
 optionsStruct &winmain::Options = options::Options;
 PrintConsole *winmain::Console = nullptr;
+
+// Bottom-screen corner (the "START Menu" hint) that opens the menu on tap.
+static constexpr int MenuTapX = 203, MenuTapY = 201;
 
 // Table row (0 = top) of the ball nearest the flippers, or -1 if none in play.
 static float LowestBallRow()
@@ -156,6 +161,25 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	n3ds_camera::State cameraState;
 	n3ds_camera::Reset(&cameraState, cameraMode);
 
+	n3ds_controls::Load();
+
+	auto toggleCamera = [&]()
+	{
+		cameraMode = n3ds_camera::NextMode(cameraMode);
+		n3ds_camera::Reset(&cameraState, cameraMode);
+		options::set_int("Camera Mode", static_cast<int>(cameraMode));
+		options::save();
+	};
+
+	// Leaving the menu: unpause, and drop flippers released while it was open
+	// (the game ignores button releases while paused).
+	auto resume = [&]()
+	{
+		end_pause();
+		uint32_t flippers = n3ds_controls::Mask(n3ds_controls::LeftFlipper) | n3ds_controls::Mask(n3ds_controls::RightFlipper);
+		pb::keyup(~n3ds_input::GetButtonsHeld() & flippers);
+	};
+
 	// Begin main loop
 
 	bQuit = false;
@@ -196,24 +220,53 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		}
 		else
 		{
-			if (buttonsDown & KEY_Y)
-				break;
-
-			if (buttonsDown & KEY_START)
-				pause();
-
-			if (buttonsDown & KEY_X)
+			// Start, or a tap on the "START Menu" corner, opens the menu and pauses
+			bool openMenu = buttonsDown & KEY_START;
+			if ((buttonsDown & KEY_TOUCH) && !n3ds_menu::IsOpen())
 			{
-				new_game();
-				n3ds_camera::Reset(&cameraState, cameraMode);
+				touchPosition touch;
+				hidTouchRead(&touch);
+				openMenu |= touch.px >= MenuTapX && touch.py >= MenuTapY;
+			}
+			if (openMenu && !n3ds_menu::IsOpen())
+			{
+				n3ds_menu::Open();
+				if (!single_step)
+					pause();
+				buttonsDown = 0; // this press only opened the menu
 			}
 
 			if (buttonsDown & KEY_SELECT)
+				toggleCamera();
+
+			if (n3ds_menu::IsOpen())
 			{
-				cameraMode = n3ds_camera::NextMode(cameraMode);
-				n3ds_camera::Reset(&cameraState, cameraMode);
-				options::set_int("Camera Mode", static_cast<int>(cameraMode));
-				options::save();
+				switch (n3ds_menu::Update(buttonsDown, buttonsHeld))
+				{
+				case n3ds_menu::Command::None:
+					break;
+				case n3ds_menu::Command::ToggleCamera:
+					toggleCamera();
+					break;
+				case n3ds_menu::Command::Close:
+					resume();
+					break;
+				case n3ds_menu::Command::NewGame:
+					resume();
+					new_game();
+					n3ds_camera::Reset(&cameraState, cameraMode);
+					break;
+				case n3ds_menu::Command::ToggleDemo:
+					resume();
+					pb::toggle_demo();
+					n3ds_camera::Reset(&cameraState, cameraMode);
+					break;
+				case n3ds_menu::Command::Quit:
+					bQuit = true;
+					break;
+				}
+				buttonsDown = 0;
+				buttonsUp = 0;
 			}
 
 			pb::keydown(buttonsDown);
@@ -260,6 +313,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		n3ds_graphics::SetProjection(&view.projection);
 		n3ds_graphics::DrawQuadMatrix(&view.modelView, tableUv[0], tableUv[1], tableUv[2], tableUv[3]);
 		n3ds_initials::Draw(n3ds_graphics::GetTopRenderTarget());
+		n3ds_menu::DrawTop(n3ds_graphics::GetTopRenderTarget());
 
 		// Render bottom screen: the game's score panel at 1:1, high scores beside it
 
@@ -287,8 +341,11 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			panelH,
 			panelUv[0], panelUv[1], panelUv[2], panelUv[3]);
 
-		n3ds_ui::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), panelW, pb::highscore_table,
-		                    n3ds_camera::ModeName(cameraMode), single_step != 0);
+		if (n3ds_menu::IsOpen())
+			n3ds_menu::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), n3ds_camera::ModeName(cameraMode), DemoActive);
+		else
+			n3ds_ui::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), panelW, pb::highscore_table,
+			                    n3ds_camera::ModeName(cameraMode));
 
 		n3ds_graphics::FinishRender();
 	}
