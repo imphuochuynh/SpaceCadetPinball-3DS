@@ -7,19 +7,19 @@
 // Pure code so it can be checked natively (tools/tile_test).
 namespace n3ds_tiles
 {
-	// Texel offset inside a tile for pixel (x, y), 0 <= x, y < 8
-	struct MortonTable
+	// Texel offset inside a tile for pixel (x, y) at [y * 8 + x]: the bits of
+	// x and y interleaved (x0 y0 x1 y1 x2 y2).
+	static const uint8_t MortonOffset[64] =
 	{
-		uint8_t offset[64];
-		constexpr MortonTable() : offset()
-		{
-			for (int y = 0; y < 8; y++)
-				for (int x = 0; x < 8; x++)
-					offset[y * 8 + x] = static_cast<uint8_t>(
-						(x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3));
-		}
+		 0,  1,  4,  5, 16, 17, 20, 21,
+		 2,  3,  6,  7, 18, 19, 22, 23,
+		 8,  9, 12, 13, 24, 25, 28, 29,
+		10, 11, 14, 15, 26, 27, 30, 31,
+		32, 33, 36, 37, 48, 49, 52, 53,
+		34, 35, 38, 39, 50, 51, 54, 55,
+		40, 41, 44, 45, 56, 57, 60, 61,
+		42, 43, 46, 47, 58, 59, 62, 63
 	};
-	constexpr MortonTable Morton{};
 
 	inline void CopyTile(uint32_t *texture, int textureWidth, const uint32_t *image, int imageStride, int tileX, int tileY)
 	{
@@ -27,7 +27,7 @@ namespace n3ds_tiles
 		const uint32_t *src = image + tileY * 8 * imageStride + tileX * 8;
 		for (int y = 0; y < 8; y++, src += imageStride)
 		{
-			const uint8_t *row = &Morton.offset[y * 8];
+			const uint8_t *row = &MortonOffset[y * 8];
 			for (int x = 0; x < 8; x++)
 				dst[row[x]] = src[x];
 		}
