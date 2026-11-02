@@ -16,6 +16,7 @@ public:
 	static void Dispose();
 
 	// x: left edge of the text column; everything right of it belongs to the UI.
+	// perfLine: frame-time meter text, or nullptr when the meter is off.
 	static void DrawBottom(C3D_RenderTarget *target, float x, const high_score_struct *table,
-	                       const char *cameraMode);
+	                       const char *cameraMode, const char *perfLine);
 };

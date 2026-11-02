@@ -47,8 +47,6 @@ private:
 	static struct optionsStruct &Options;
 	static struct PrintConsole *Console;
 
-	static uint8_t **GenerateMortonSwizzle(uint8_t *renderTextureData, const uint16_t renderTextureWidth, const uint32_t screenTexturePixelCount);
-	static void SwizzleAndCopy(uint8_t **swizzle, const uint32_t screenTexturePixelCount);
 
 	static void PrintMessage(const char *message, ...);
 };

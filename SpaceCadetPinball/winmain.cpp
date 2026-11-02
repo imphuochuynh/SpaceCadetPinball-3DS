@@ -17,6 +17,8 @@
 #include "n3ds_initials.h"
 #include "n3ds_menu.h"
 #include "n3ds_font.h"
+#include "n3ds_dirty.h"
+#include "n3ds_tiles.h"
 #include "n3ds_controls.h"
 #include "high_score.h"
 #include "proj.h"
@@ -126,21 +128,41 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 
 	// Texture data and create texture object
 
-	uint32_t screenTexturePixelCount = render::vscreen->Width * render::vscreen->Height;
-
+	// The game's screen lives in two GPU textures in linear memory, used
+	// alternately: the CPU fills one while the GPU may still be reading the
+	// other. Only 8x8 tiles that changed since that buffer was last filled get
+	// copied (n3ds_dirty), instead of the whole screen every frame.
 	constexpr uint16_t renderTextureWidth = 1024;
 	constexpr uint16_t renderTextureHeight = 512;
-	uint32_t renderTextureByteCount = n3ds_graphics::GetTextureSize(renderTextureWidth, renderTextureHeight, GPU_RGBA8, 0);
-	uint8_t *renderTextureData = (uint8_t *)linearAlloc(renderTextureByteCount);
-	memset(renderTextureData, 0, renderTextureByteCount);
+	C3D_Tex renderTextures[2];
+	for (auto &tex : renderTextures)
+	{
+		C3D_TexInit(&tex, renderTextureWidth, renderTextureHeight, GPU_RGBA8);
+		C3D_TexSetFilter(&tex, GPU_LINEAR, GPU_LINEAR);
+		C3D_TexSetWrap(&tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+		memset(tex.data, 0, tex.size);
+	}
+	int renderBuffer = 0;
+	n3ds_dirty::Init(render::vscreen);
 
-	C3D_Tex renderTextureObject;
-	n3ds_graphics::CreateTextureObject(&renderTextureObject, renderTextureWidth, renderTextureHeight, GPU_RGBA8, GPU_CLAMP_TO_EDGE, GPU_LINEAR);
-	n3ds_graphics::BindTextureObject(&renderTextureObject, 0);
-
-	// Precalculate the Morton swizzle
-
-	uint8_t **swizzle = GenerateMortonSwizzle(renderTextureData, renderTextureWidth, screenTexturePixelCount);
+	auto uploadScreen = [&](int buffer)
+	{
+		C3D_Tex &tex = renderTextures[buffer];
+		int firstRow, lastRow;
+		n3ds_tiles::CopyDirtyTiles<n3ds_dirty::MaxTilesX>(
+			static_cast<uint32_t *>(tex.data), renderTextureWidth,
+			&render::vscreen->BmpBufPtr1[0].Color, render::vscreen->Stride,
+			n3ds_dirty::tiles, n3ds_dirty::tilesX, n3ds_dirty::tilesY,
+			static_cast<uint8_t>(1 << buffer), &firstRow, &lastRow);
+		if (firstRow >= 0)
+		{
+			// A tile row is contiguous in memory: flush just the rows written
+			const size_t rowBytes = static_cast<size_t>(renderTextureWidth) * 8 * 4;
+			GSPGPU_FlushDataCache(static_cast<uint8_t *>(tex.data) + firstRow * rowBytes, (lastRow - firstRow + 1) * rowBytes);
+		}
+		n3ds_graphics::BindTextureObject(&tex, 0);
+	};
+	uploadScreen(renderBuffer);
 
 	// Initialize input
 
@@ -186,8 +208,22 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 
 	bQuit = false;
 
+	// Frame-time meter (Y while the menu is open toggles it)
+	bool showPerf = false;
+	uint64_t lastFrameStart = svcGetSystemTick();
+	float cpuMsAverage = 0.0f;
+	int droppedFrames = 0;
+	char perfLine[32] = {};
+	const double ticksPerMs = SYSCLOCK_ARM11 / 1000.0;
+
 	while (n3ds_graphics::IsMainLoopRunning() && !bQuit)
 	{
+		uint64_t frameStart = svcGetSystemTick();
+		double frameMs = (frameStart - lastFrameStart) / ticksPerMs;
+		lastFrameStart = frameStart;
+		if (showPerf && frameMs > 1000.0 / 60.0 * 1.5 && !single_step)
+			droppedFrames++;
+
 		// Input
 
 		n3ds_input::ScanPads();
@@ -241,6 +277,12 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			if (buttonsDown & KEY_SELECT)
 				toggleCamera();
 
+			if (n3ds_menu::IsOpen() && (buttonsDown & KEY_Y))
+			{
+				showPerf = !showPerf;
+				droppedFrames = 0;
+			}
+
 			if (n3ds_menu::IsOpen())
 			{
 				switch (n3ds_menu::Update(buttonsDown, buttonsHeld))
@@ -280,10 +322,10 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 
 				pb::frame(1000.0f / 60.0f);
 
-				// Swizzle the texture, copy it to render texture and upload
+				// Copy what changed into the texture the GPU isn't using
 
-				SwizzleAndCopy(swizzle, screenTexturePixelCount);
-				n3ds_graphics::UploadTextureObject(&renderTextureObject, renderTextureData);
+				renderBuffer ^= 1;
+				uploadScreen(renderBuffer);
 
 				n3ds_camera::Update(&cameraState, cameraMode, LowestBallRow());
 			}
@@ -301,6 +343,14 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		};
 
 		// Render top screen: the table, through the camera
+
+		if (showPerf)
+		{
+			// CPU time for this frame's game update and texture upload
+			float cpuMs = static_cast<float>((svcGetSystemTick() - frameStart) / ticksPerMs);
+			cpuMsAverage += (cpuMs - cpuMsAverage) * 0.1f;
+			snprintf(perfLine, sizeof perfLine, "%.1fMS %dD", cpuMsAverage, droppedFrames);
+		}
 
 		n3ds_graphics::BeginRender(IsNew3DS ? true : single_step);
 		n3ds_font::BeginFrame();
@@ -350,7 +400,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			n3ds_menu::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), n3ds_camera::ModeName(cameraMode), DemoActive);
 		else
 			n3ds_ui::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), panelW, pb::highscore_table,
-			                    n3ds_camera::ModeName(cameraMode));
+			                    n3ds_camera::ModeName(cameraMode), showPerf ? perfLine : nullptr);
 
 		n3ds_graphics::FinishRender();
 	}
@@ -366,9 +416,8 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	n3ds_font::Dispose();
 	n3ds_ui::Dispose();
 
-	delete[] swizzle;
-	C3D_TexDelete(&renderTextureObject);
-	linearFree(renderTextureData);
+	for (auto &tex : renderTextures)
+		C3D_TexDelete(&tex);
 	n3ds_graphics::Dispose();
 	gfxExit();
 
@@ -418,81 +467,6 @@ void winmain::UpdateFrameRate()
 	auto fps = Options.FramesPerSecond, ups = Options.UpdatesPerSecond;
 	UpdateToFrameRatio = static_cast<double>(ups) / fps;
 	TargetFrameTime = DurationMs(1000.0 / ups);
-}
-
-uint8_t **winmain::GenerateMortonSwizzle(uint8_t *renderTextureData, const uint16_t renderTextureWidth, const uint32_t screenTexturePixelCount)
-{
-	uint8_t **swizzle = new uint8_t *[screenTexturePixelCount >> 1];
-
-	uint32_t dstOffset = 0;
-	uint32_t widthCount = 0;
-	constexpr uint32_t tileSize = 8;
-	constexpr uint32_t subTileSize1 = 4;
-	constexpr uint32_t subTileSize2 = 2;
-	uint32_t widthBytes = render::vscreen->Width * tileSize * 4;
-
-	for (int32_t y = 0; y < render::vscreen->Height; y += tileSize)
-	{
-		for (int32_t x = 0; x < render::vscreen->Width; x += tileSize)
-		{
-			for (uint8_t ty = 0; ty < tileSize; ty += subTileSize1)
-			{
-				for (uint8_t tx = 0; tx < tileSize; tx += subTileSize1)
-				{
-					for (uint8_t sty1 = 0; sty1 < subTileSize1; sty1 += subTileSize2)
-					{
-						for (uint8_t stx1 = 0; stx1 < subTileSize1; stx1 += subTileSize2)
-						{
-							for (uint8_t sty2 = 0; sty2 < subTileSize2; sty2++)
-							{
-								uint32_t index = (y + ty + sty1 + sty2) * render::vscreen->Width + (x + tx + stx1);
-								swizzle[index >> 1] = &renderTextureData[dstOffset + 0];
-								//swizzle[index + 1] = &renderTextureData[dstOffset + 4];
-
-								dstOffset += 8;
-								widthCount += 8;
-								if (widthCount == widthBytes)
-								{
-									dstOffset += (renderTextureWidth - render::vscreen->Width) << 5;
-									widthCount = 0;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return swizzle;
-}
-
-void winmain::SwizzleAndCopy(uint8_t **swizzle, const uint32_t screenTexturePixelCount)
-{
-	// for (int32_t y = 0; y < render::vscreen->Height; y++)
-	// {
-	// 	for (int32_t x = 0; x < render::vscreen->Width; x++)
-	// 	{
-	// 		render::vscreen->BmpBufPtr1[y * render::vscreen->Width + x].rgba.Alpha = 0xFF;
-	// 		render::vscreen->BmpBufPtr1[y * render::vscreen->Width + x].rgba.Blue = 0x00;
-	// 		render::vscreen->BmpBufPtr1[y * render::vscreen->Width + x].rgba.Green = y & 0xff;
-	// 		render::vscreen->BmpBufPtr1[y * render::vscreen->Width + x].rgba.Red = x & 0xff;
-	// 	}
-	// }
-
-	for (uint32_t i = 0; i < screenTexturePixelCount; i += 16)
-	{
-		uint32_t *src = &render::vscreen->BmpBufPtr1[i].Color;
-		uint8_t **dst = &swizzle[i >> 1];
-		memcpy(dst[0], &src[0], 8);
-		memcpy(dst[1], &src[2], 8);
-		memcpy(dst[2], &src[4], 8);
-		memcpy(dst[3], &src[6], 8);
-		memcpy(dst[4], &src[8], 8);
-		memcpy(dst[5], &src[10], 8);
-		memcpy(dst[6], &src[12], 8);
-		memcpy(dst[7], &src[14], 8);
-	}
 }
 
 void winmain::PrintMessage(const char *message, ...)

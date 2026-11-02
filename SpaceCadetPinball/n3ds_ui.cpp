@@ -33,7 +33,7 @@ static void FormatScore(char *out, size_t size, int score)
 }
 
 void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_struct *table,
-                         const char *cameraMode)
+                         const char *cameraMode, const char *perfLine)
 {
 	C2D_Prepare();
 	C2D_SceneBegin(target);
@@ -77,7 +77,10 @@ void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_str
 	for (char *c = view; *c; c++)
 		*c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
 	n3ds_font::Draw(view, left, 192.0f, 1.0f, n3ds_font::Left, width, 0.6f);
-	n3ds_font::Draw("SELECT", left, 214.0f, 1.0f, n3ds_font::Left, width - 22.0f, 0.35f);
+	if (perfLine)
+		n3ds_font::Draw(perfLine, left, 214.0f, 1.0f, n3ds_font::Left, width - 22.0f, 1.0f);
+	else
+		n3ds_font::Draw("SELECT", left, 214.0f, 1.0f, n3ds_font::Left, width - 22.0f, 0.35f);
 
 	for (int k = 0; k < 3; k++)
 		C2D_DrawRectSolid(right - 16.0f, 218.0f + k * 6.0f, 0.5f, 16.0f, 3.0f, ColorIcon);
