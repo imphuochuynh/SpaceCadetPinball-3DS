@@ -46,8 +46,8 @@ winmain::DurationMs winmain::TargetFrameTime;
 optionsStruct &winmain::Options = options::Options;
 PrintConsole *winmain::Console = nullptr;
 
-// Bottom-screen corner (the "START Menu" hint) that opens the menu on tap.
-static constexpr int MenuTapX = 203, MenuTapY = 201;
+// Bottom-screen footer (view name + menu icon) that opens the menu on tap.
+static constexpr int MenuTapX = 203, MenuTapY = 186;
 
 // Table row (0 = top) of the ball nearest the flippers, or -1 if none in play.
 static float LowestBallRow()

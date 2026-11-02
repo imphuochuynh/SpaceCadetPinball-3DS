@@ -12,16 +12,16 @@
 
 namespace
 {
-	enum class Page { Main, Controls, ConfirmReset, ConfirmQuit };
+	enum class Page { Main, Controls, HighScores, ConfirmReset, ConfirmQuit };
 
 	enum ButtonId
 	{
 		// Main
 		BtnResume, BtnNewGame, BtnPlayers, BtnCamera, BtnSound, BtnMusic,
-		BtnControls, BtnDemo, BtnResetScores, BtnQuit,
+		BtnControls, BtnDemo, BtnHighScores, BtnQuit,
 		// Controls (one per action, then these)
 		BtnAction0 = 100,
-		BtnDefaults = 200, BtnBack,
+		BtnDefaults = 200, BtnBack, BtnResetScores,
 		// Confirm pages
 		BtnCancel = 300, BtnConfirm,
 	};
@@ -78,7 +78,7 @@ namespace
 			// 2 columns x 5 rows of big touch targets
 			const float m = 8.0f, gap = 6.0f, w = (320.0f - 2 * m - gap) / 2, h = 40.0f;
 			const int ids[10] = {BtnResume, BtnNewGame, BtnPlayers, BtnCamera, BtnSound,
-			                     BtnMusic, BtnControls, BtnDemo, BtnResetScores, BtnQuit};
+			                     BtnMusic, BtnControls, BtnDemo, BtnHighScores, BtnQuit};
 			for (int i = 0; i < 10; i++)
 				l.Add(ids[i], m + (i % 2) * (w + gap), m + (i / 2) * (h + gap), w, h);
 			break;
@@ -87,6 +87,10 @@ namespace
 			for (int i = 0; i < n3ds_controls::ActionCount; i++)
 				l.Add(BtnAction0 + i, 8.0f, 30.0f + i * 28.0f, 304.0f, 25.0f);
 			l.Add(BtnDefaults, 8.0f, 202.0f, 149.0f, 32.0f);
+			l.Add(BtnBack, 163.0f, 202.0f, 149.0f, 32.0f);
+			break;
+		case Page::HighScores:
+			l.Add(BtnResetScores, 8.0f, 202.0f, 149.0f, 32.0f);
 			l.Add(BtnBack, 163.0f, 202.0f, 149.0f, 32.0f);
 			break;
 		case Page::ConfirmReset:
@@ -151,6 +155,8 @@ namespace
 		return command;
 	}
 
+	n3ds_menu::Command Back();
+
 	n3ds_menu::Command Activate(int id)
 	{
 		using C = n3ds_menu::Command;
@@ -174,14 +180,15 @@ namespace
 		case BtnDemo:
 			playersChanged = false;
 			return CloseWith(C::ToggleDemo);
+		case BtnHighScores: GoTo(Page::HighScores, BtnBack); return C::None;
 		case BtnResetScores: GoTo(Page::ConfirmReset, BtnCancel); return C::None;
 		case BtnQuit: GoTo(Page::ConfirmQuit, BtnCancel); return C::None;
 
 		case BtnDefaults: n3ds_controls::ResetDefaults(); return C::None;
-		case BtnBack: GoTo(Page::Main, BtnControls); return C::None;
+		case BtnBack: return Back();
 
 		case BtnCancel:
-			GoTo(Page::Main, page == Page::ConfirmQuit ? BtnQuit : BtnResetScores);
+			return Back();
 			return C::None;
 		case BtnConfirm:
 			if (page == Page::ConfirmQuit)
@@ -193,7 +200,7 @@ namespace
 			high_score::clear_table(pb::highscore_table);
 			high_score::write(pb::highscore_table);
 			options::save();
-			GoTo(Page::Main, BtnResetScores);
+			GoTo(Page::HighScores, BtnBack);
 			return C::None;
 
 		default:
@@ -209,13 +216,28 @@ namespace
 		{
 		case Page::Main: return CloseWith(n3ds_menu::Command::Close);
 		case Page::Controls: GoTo(Page::Main, BtnControls); break;
-		case Page::ConfirmReset: GoTo(Page::Main, BtnResetScores); break;
+		case Page::HighScores: GoTo(Page::Main, BtnHighScores); break;
+		case Page::ConfirmReset: GoTo(Page::HighScores, BtnResetScores); break;
 		case Page::ConfirmQuit: GoTo(Page::Main, BtnQuit); break;
 		}
 		return n3ds_menu::Command::None;
 	}
 
 	// ---- Drawing --------------------------------------------------------------
+
+	void FormatScore(char *out, size_t size, int value)
+	{
+		char digits[16];
+		snprintf(digits, sizeof digits, "%d", value);
+		size_t len = strlen(digits), o = 0;
+		for (size_t i = 0; i < len && o + 2 < size; i++)
+		{
+			if (i > 0 && (len - i) % 3 == 0)
+				out[o++] = ',';
+			out[o++] = digits[i];
+		}
+		out[o] = 0;
+	}
 
 	void Frame(float x, float y, float w, float h, u32 color, float t)
 	{
@@ -340,7 +362,7 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 			case BtnMusic: snprintf(label, sizeof label, "Music: %s", options::Options.Music ? "On" : "Off"); break;
 			case BtnControls: snprintf(label, sizeof label, "Controls"); break;
 			case BtnDemo: snprintf(label, sizeof label, demoActive ? "Stop Demo" : "Demo"); break;
-			case BtnResetScores: snprintf(label, sizeof label, "Reset Scores"); break;
+			case BtnHighScores: snprintf(label, sizeof label, "High Scores"); break;
 			case BtnQuit: snprintf(label, sizeof label, "Quit"); tint = ColorDanger; break;
 			}
 			DrawButton(b, i == highlight, label, tint);
@@ -373,6 +395,35 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 			}
 		}
 		break;
+
+	case Page::HighScores:
+	{
+		n3ds_font::Draw("HIGH SCORES", 160, 8, 1.0f, n3ds_font::Center);
+		C2D_DrawRectSolid(20, 36, 0.5f, 280, 1, ColorRule);
+		auto table = pb::highscore_table;
+		for (int i = 0; i < 5; i++)
+		{
+			float y = 44.0f + i * 30.0f;
+			bool empty = table[i].Score <= 0;
+			char rank[4], score[24];
+			snprintf(rank, sizeof rank, "%d", i + 1);
+			if (empty)
+				strcpy(score, "---");
+			else
+				FormatScore(score, sizeof score, table[i].Score);
+			n3ds_font::Draw(rank, 40, y, 1.0f, n3ds_font::Left, 0.0f, 0.6f);
+			n3ds_font::Draw(empty || !table[i].Name[0] ? "---" : table[i].Name, 70, y, 1.0f,
+			                n3ds_font::Left, 90.0f, empty ? 0.6f : 1.0f);
+			n3ds_font::Draw(score, 290, y, 1.0f, n3ds_font::Right, 150.0f, empty ? 0.6f : 1.0f);
+		}
+		for (int i = 0; i < l.count; i++)
+		{
+			const Button &b = l.buttons[i];
+			bool reset = b.id == BtnResetScores;
+			DrawButton(b, i == highlight, reset ? "Reset" : "Back", reset ? ColorDanger : 0);
+		}
+		break;
+	}
 
 	case Page::ConfirmReset:
 	case Page::ConfirmQuit:

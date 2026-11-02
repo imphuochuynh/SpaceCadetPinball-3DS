@@ -1,29 +1,21 @@
 #include "pch.h"
 #include "n3ds_ui.h"
 
+#include <cctype>
 #include <citro2d.h>
 
 #include "high_score.h"
+#include "n3ds_font.h"
 
-static C2D_TextBuf textBuf = nullptr;
-
-// Palette for the dark panel
-static const u32 ColorHeader = C2D_Color32(0x8F, 0xB8, 0xFF, 0xFF);
-static const u32 ColorName = C2D_Color32(0xE8, 0xE8, 0xF0, 0xFF);
-static const u32 ColorScore = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF);
-static const u32 ColorDim = C2D_Color32(0x7A, 0x80, 0x90, 0xFF);
 static const u32 ColorRule = C2D_Color32(0x2C, 0x32, 0x40, 0xFF);
+static const u32 ColorIcon = C2D_Color32(0x78, 0x58, 0xDC, 0xFF); // the font's lit-dot purple
 
 void n3ds_ui::Initialize()
 {
-	textBuf = C2D_TextBufNew(1024);
 }
 
 void n3ds_ui::Dispose()
 {
-	if (textBuf)
-		C2D_TextBufDelete(textBuf);
-	textBuf = nullptr;
 }
 
 static void FormatScore(char *out, size_t size, int score)
@@ -31,36 +23,18 @@ static void FormatScore(char *out, size_t size, int score)
 	char digits[16];
 	snprintf(digits, sizeof digits, "%d", score);
 	size_t len = strlen(digits), o = 0;
-	for (size_t i = 0; i < len && o + 1 < size; i++)
+	for (size_t i = 0; i < len && o + 2 < size; i++)
 	{
-		if (i > 0 && (len - i) % 3 == 0 && o + 1 < size)
+		if (i > 0 && (len - i) % 3 == 0)
 			out[o++] = ',';
 		out[o++] = digits[i];
 	}
 	out[o] = 0;
 }
 
-// Draw text, shrinking it if it would be wider than maxWidth.
-static void DrawText(const char *str, float x, float y, float scale, u32 color, float maxWidth, bool alignRight = false)
-{
-	C2D_Text text;
-	C2D_TextParse(&text, textBuf, str);
-	C2D_TextOptimize(&text);
-
-	float w, h;
-	C2D_TextGetDimensions(&text, scale, scale, &w, &h);
-	float sx = scale;
-	if (maxWidth > 0 && w > maxWidth)
-		sx = scale * (maxWidth / w);
-
-	u32 flags = C2D_WithColor | (alignRight ? C2D_AlignRight : 0);
-	C2D_DrawText(&text, flags, x, y, 0.5f, sx, scale, color);
-}
-
 void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_struct *table,
                          const char *cameraMode)
 {
-	C2D_TextBufClear(textBuf);
 	C2D_Prepare();
 	C2D_SceneBegin(target);
 
@@ -68,33 +42,43 @@ void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_str
 	const float right = ScreenWidth - 6.0f;
 	const float width = right - left;
 
-	DrawText("HIGH SCORES", left, 6.0f, 0.5f, ColorHeader, width);
-	C2D_DrawRectSolid(left, 25.0f, 0.5f, width, 1.0f, ColorRule);
+	n3ds_font::Draw("TOP 3", left, 6.0f);
+	C2D_DrawRectSolid(left, 30.0f, 0.5f, width, 1.0f, ColorRule);
 
-	// One row per score: rank, initials, score (right-aligned)
-	float y = 34.0f;
-	for (int i = 0; i < 5; i++, y += 32.0f)
+	// Two lines per entry: rank + initials, then the score right-aligned.
+	// The full top 5 is on the menu's High Scores page.
+	float y = 36.0f;
+	for (int i = 0; i < 3; i++, y += 48.0f)
 	{
+		bool empty = table[i].Score <= 0;
+
 		char rank[4];
 		snprintf(rank, sizeof rank, "%d", i + 1);
-		DrawText(rank, left, y, 0.45f, ColorDim, 0);
-
-		bool empty = table[i].Score <= 0;
-		const char *name = empty || !table[i].Name[0] ? "---" : table[i].Name;
-		DrawText(name, left + 11.0f, y, 0.5f, empty ? ColorDim : ColorName, 34.0f);
+		n3ds_font::Draw(rank, left, y, 1.0f, n3ds_font::Left, 0.0f, 0.6f);
+		n3ds_font::Draw(empty || !table[i].Name[0] ? "---" : table[i].Name, left + 16.0f, y, 1.0f,
+		                n3ds_font::Left, width - 16.0f, empty ? 0.6f : 1.0f);
 
 		char score[24];
 		if (empty)
 			strcpy(score, "---");
 		else
 			FormatScore(score, sizeof score, table[i].Score);
-		DrawText(score, right, y, 0.5f, empty ? ColorDim : ColorScore, width - 50.0f, true);
+		n3ds_font::Draw(score, right, y + 22.0f, 1.0f, n3ds_font::Right, width, empty ? 0.6f : 1.0f);
+
+		if (i < 2)
+			C2D_DrawRectSolid(left, y + 44.0f, 0.5f, width, 1.0f, ColorRule);
 	}
 
-	C2D_DrawRectSolid(left, 201.0f, 0.5f, width, 1.0f, ColorRule);
-	DrawText("START  Menu", left, 206.0f, 0.42f, ColorDim, width); // also a tap target
+	// Footer: current view (Select switches it) and the menu icon (tap or Start)
+	C2D_DrawRectSolid(left, 186.0f, 0.5f, width, 1.0f, ColorRule);
 
-	char cam[48];
-	snprintf(cam, sizeof cam, "SELECT  %s", cameraMode);
-	DrawText(cam, left, 222.0f, 0.42f, ColorDim, width);
+	char view[16];
+	snprintf(view, sizeof view, "%s", cameraMode);
+	for (char *c = view; *c; c++)
+		*c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
+	n3ds_font::Draw(view, left, 192.0f, 1.0f, n3ds_font::Left, width, 0.6f);
+	n3ds_font::Draw("SELECT", left, 214.0f, 1.0f, n3ds_font::Left, width - 22.0f, 0.35f);
+
+	for (int k = 0; k < 3; k++)
+		C2D_DrawRectSolid(right - 16.0f, 218.0f + k * 6.0f, 0.5f, 16.0f, 3.0f, ColorIcon);
 }
