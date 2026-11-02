@@ -8,11 +8,15 @@ namespace n3ds_camera
 	// which still fits the full table width on the 400px screen.
 	constexpr float FollowTableHeight = 420.0f;
 
-	// Camera smoothing per 60fps frame. The camera chases a falling ball faster
-	// than a rising one, so the flippers come into view before the ball arrives.
-	constexpr float SmoothingDown = 0.20f;
-	constexpr float SmoothingUp = 0.08f;
-	constexpr float LookaheadFrames = 10.0f;
+	// Camera motion is a critically damped spring: it eases toward the target
+	// without overshoot or sudden speed changes. Smaller = snappier.
+	constexpr float SmoothTime = 0.16f; // seconds
+	constexpr float FrameTime = 1.0f / 60.0f;
+
+	// Look ahead of a falling ball so the flippers come into view early.
+	// Velocity is smoothed first; raw frame-to-frame deltas are too noisy.
+	constexpr float LookaheadFrames = 12.0f;
+	constexpr float VelocitySmoothing = 0.15f;
 
 	// ---- Helpers ----------------------------------------------------------------
 
@@ -62,7 +66,9 @@ namespace n3ds_camera
 		float lo, hi;
 		FocusLimits(mode, &lo, &hi);
 		state->focusRow = hi; // start on the flippers and plunger
+		state->focusVelocity = 0.0f;
 		state->lastBallRow = -1.0f;
+		state->ballVelocity = 0.0f;
 	}
 
 	void Update(State *state, Mode mode, float ballRow)
@@ -75,17 +81,37 @@ namespace n3ds_camera
 		{
 			target = hi;
 			state->lastBallRow = -1.0f;
+			state->ballVelocity = 0.0f;
 		}
 		else
 		{
-			float velocity = state->lastBallRow >= 0.0f ? ballRow - state->lastBallRow : 0.0f;
+			if (state->lastBallRow >= 0.0f)
+			{
+				float raw = ballRow - state->lastBallRow;
+				state->ballVelocity += (raw - state->ballVelocity) * VelocitySmoothing;
+			}
 			state->lastBallRow = ballRow;
-			target = ballRow + velocity * LookaheadFrames;
+			// Only lead a falling ball (positive = toward the flippers)
+			float lead = state->ballVelocity > 0.0f ? state->ballVelocity * LookaheadFrames : 0.0f;
+			target = ballRow + lead;
 		}
-
 		target = Clamp(target, lo, hi);
-		float k = target > state->focusRow ? SmoothingDown : SmoothingUp;
-		state->focusRow = Clamp(state->focusRow + (target - state->focusRow) * k, lo, hi);
+
+		// Critically damped spring step (as in Game Programming Gems 4, 1.10)
+		float omega = 2.0f / SmoothTime;
+		float x = omega * FrameTime;
+		float decay = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+		float change = state->focusRow - target;
+		float temp = (state->focusVelocity + omega * change) * FrameTime;
+		state->focusVelocity = (state->focusVelocity - omega * temp) * decay;
+		float next = target + (change + temp) * decay;
+
+		if (next < lo || next > hi)
+		{
+			next = Clamp(next, lo, hi);
+			state->focusVelocity = 0.0f; // stop at the table edge instead of pushing into it
+		}
+		state->focusRow = next;
 	}
 
 	void Compute(Mode mode, const State &state, float shakeX, float shakeY, View *out)

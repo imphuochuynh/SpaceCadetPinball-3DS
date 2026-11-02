@@ -37,8 +37,10 @@ namespace n3ds_camera
 
 	struct State
 	{
-		float focusRow = TableHeight; // smoothed table row the camera centers on
-		float lastBallRow = -1.0f;    // for the ball's vertical velocity
+		float focusRow = TableHeight; // table row the camera centers on
+		float focusVelocity = 0.0f;   // camera speed, rows per second (spring state)
+		float lastBallRow = -1.0f;    // previous frame's ball row
+		float ballVelocity = 0.0f;    // smoothed ball speed, rows per frame
 	};
 
 	const char *ModeName(Mode mode);
