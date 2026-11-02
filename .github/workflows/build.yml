@@ -15,8 +15,13 @@ jobs:
 
       - name: Install 3DS libraries
         run: |
-          dkp-pacman -Sy --noconfirm
-          dkp-pacman -S --needed --noconfirm 3ds-sdl 3ds-sdl_mixer
+          # The devkitarm image usually ships these already; only hit the
+          # package server (which sometimes refuses CI runners) if missing.
+          dkp-pacman -Q 3ds-sdl 3ds-sdl_mixer 3ds-libvorbisidec 3ds-libmad 3ds-libmikmod citro3d || {
+            dkp-pacman -Sy --noconfirm &&
+            dkp-pacman -S --needed --noconfirm 3ds-sdl 3ds-sdl_mixer
+          }
+          ls "$DEVKITPRO/portlibs/3ds/lib" | head -50
 
       - name: Install CIA tools (makerom, bannertool)
         env:
