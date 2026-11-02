@@ -2,8 +2,11 @@
 #include "high_score.h"
 
 #include "options.h"
+#include "pb.h"
 #include "pinball.h"
 #include "score.h"
+
+#include <3ds.h>
 
 int high_score::dlg_enter_name;
 int high_score::dlg_score;
@@ -11,6 +14,7 @@ int high_score::dlg_position;
 char high_score::default_name[32]{};
 high_score_struct* high_score::dlg_hst;
 bool high_score::ShowDialog = false;
+std::vector<high_score::pending_entry> high_score::pending{};
 
 
 int high_score::read(high_score_struct* table)
@@ -135,10 +139,81 @@ void high_score::show_and_set_high_score_dialog(high_score_struct* table, int sc
 	dlg_hst = table;
 	dlg_enter_name = 1;
 	strncpy(default_name, defaultName, sizeof default_name - 1);
-	ShowDialog = true;
+
+	// Queue it; the position is recomputed when the name is entered, since
+	// several players can place in the same game.
+	pending_entry entry{};
+	entry.score = score;
+	strncpy(entry.defaultName, defaultName, sizeof entry.defaultName - 1);
+	pending.push_back(entry);
 }
 
 void high_score::RenderHighScoreDialog()
 {
-	
+	// The 3DS port draws the table on the bottom screen (n3ds_ui).
+}
+
+bool high_score::HasPendingEntry()
+{
+	return !pending.empty();
+}
+
+// Cut a UTF-8 string to fit maxBytes without splitting a character,
+// and drop characters that would break the settings file.
+static void CopyName(char* dst, size_t dstSize, const char* src)
+{
+	size_t len = 0;
+	for (size_t i = 0; src[i] && len < dstSize - 1; )
+	{
+		unsigned char c = static_cast<unsigned char>(src[i]);
+		size_t charLen = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 1;
+		if (len + charLen > dstSize - 1)
+			break;
+		for (size_t k = 0; k < charLen && src[i]; k++, i++)
+		{
+			char ch = src[i];
+			dst[len++] = (ch == '\n' || ch == '\r') ? ' ' : ch;
+		}
+	}
+	dst[len] = 0;
+}
+
+void high_score::ProcessPendingEntry()
+{
+	if (pending.empty())
+		return;
+
+	auto entry = pending.front();
+	pending.erase(pending.begin());
+
+	auto table = pb::highscore_table;
+	int position = get_score_position(table, entry.score);
+	if (position < 0)
+		return;
+
+	char hint[64];
+	snprintf(hint, sizeof hint, "High score #%d! Enter your name", position + 1);
+
+	char input[96]{};
+	SwkbdState swkbd;
+	swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, 16);
+	swkbdSetHintText(&swkbd, hint);
+	swkbdSetInitialText(&swkbd, entry.defaultName);
+	swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+	swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Skip", false);
+	swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
+	SwkbdButton button = swkbdInputText(&swkbd, input, sizeof input);
+
+	// Skipping still records the score, under the default "Player N" name.
+	char name[32];
+	CopyName(name, sizeof name, button == SWKBD_BUTTON_CONFIRM && input[0] ? input : entry.defaultName);
+
+	place_new_score_into(table, entry.score, name, position);
+	SaveNow(table);
+}
+
+void high_score::SaveNow(high_score_struct* table)
+{
+	write(table);
+	options::save();
 }

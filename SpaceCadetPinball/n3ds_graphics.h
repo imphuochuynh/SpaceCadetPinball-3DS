@@ -2,6 +2,7 @@
 
 #include <3ds.h>
 #include <citro3d.h>
+#include <citro2d.h>
 
 #define DISPLAY_TRANSFER_FLAGS                                                                     \
     (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) |               \
@@ -22,6 +23,11 @@ private:
     static C3D_Mtx topProjection;
     static C3D_Mtx bottomProjection;
     static void *vbo_data;
+    static C3D_AttrInfo attrInfo;
+    static C3D_BufInfo bufInfo;
+    static C3D_Tex *boundTexture;
+
+    static void RestoreState();
 
 public:
     static void Initialize();
@@ -35,6 +41,10 @@ public:
     static void SetBottomOrthoProjectionMatrix(float left, float right, float bottom, float top, float near, float far);
     static void SetModelViewMatrix(float x, float y, float w, float h);
     static void DrawQuad(float x, float y, float w, float h, float uvX, float uvY, float uvW, float uvH);
+    // Draw the unit quad with an explicit model-view matrix (camera views).
+    static void DrawQuadMatrix(const C3D_Mtx *modelView, float uvX, float uvY, float uvW, float uvH);
+    static void SetProjection(const C3D_Mtx *projection);
+    static C3D_RenderTarget *GetBottomRenderTarget() { return bottomRenderTarget; }
     static void CreateTextureObject(C3D_Tex *textureObject, uint16_t width, uint16_t height, GPU_TEXCOLOR format, GPU_TEXTURE_WRAP_PARAM wrap, GPU_TEXTURE_FILTER_PARAM filter);
     static void UploadTextureObject(C3D_Tex *textureObject, void *textureData);
     static void BindTextureObject(C3D_Tex *textureObject, int32_t mapIndex);

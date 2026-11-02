@@ -18,6 +18,9 @@ int8_t n3ds_graphics::uLoc_uvOffset = 0;
 C3D_Mtx n3ds_graphics::topProjection = {};
 C3D_Mtx n3ds_graphics::bottomProjection = {};
 void *n3ds_graphics::vbo_data = nullptr;
+C3D_AttrInfo n3ds_graphics::attrInfo = {};
+C3D_BufInfo n3ds_graphics::bufInfo = {};
+C3D_Tex *n3ds_graphics::boundTexture = nullptr;
 
 typedef struct
 {
@@ -63,10 +66,10 @@ void n3ds_graphics::Initialize()
 
     // Configure attributes for use with the vertex shader
 
-    C3D_AttrInfo *attrInfo = C3D_GetAttrInfo();
-    AttrInfo_Init(attrInfo);
-    AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 3); // v0=position
-    AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 2); // v1=texcoord
+    // Kept in our own structs so they can be restored after citro2d draws text.
+    AttrInfo_Init(&attrInfo);
+    AttrInfo_AddLoader(&attrInfo, 0, GPU_FLOAT, 3); // v0=position
+    AttrInfo_AddLoader(&attrInfo, 1, GPU_FLOAT, 2); // v1=texcoord
 
     // Create the VBO (vertex buffer object)
 
@@ -75,23 +78,44 @@ void n3ds_graphics::Initialize()
 
     // Configure buffers
 
-    C3D_BufInfo *bufInfo = C3D_GetBufInfo();
-    BufInfo_Init(bufInfo);
-    BufInfo_Add(bufInfo, vbo_data, sizeof(vertex), 2, 0x10);
+    BufInfo_Init(&bufInfo);
+    BufInfo_Add(&bufInfo, vbo_data, sizeof(vertex), 2, 0x10);
 
-    // Configure the first fragment shading substage to just pass through the vertex color
-    // See https://www.opengl.org/sdk/docs/man2/xhtml/glTexEnv.xml for more insight
+    RestoreState();
 
+    // citro2d draws the text on the bottom screen
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
+}
+
+void n3ds_graphics::RestoreState()
+{
+    C3D_BindProgram(&program);
+    C3D_SetAttrInfo(&attrInfo);
+    C3D_SetBufInfo(&bufInfo);
+
+    // Texture stage 0 outputs the texture color; the rest pass it through
+    // (citro2d reconfigures stages 0-5 for its own drawing).
     C3D_TexEnv *env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
     C3D_TexEnvColor(env, 0xff00ffff);
     C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, GPU_CONSTANT, GPU_CONSTANT);
     C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+    for (int i = 1; i < 6; i++)
+        C3D_TexEnvInit(C3D_GetTexEnv(i));
+
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+    C3D_CullFace(GPU_CULL_NONE);
+    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA);
+
+    if (boundTexture)
+        C3D_TexBind(0, boundTexture);
 }
 
 void n3ds_graphics::Dispose()
 {
     // Free the VBO
+
+    C2D_Fini();
 
     linearFree(vbo_data);
 
@@ -114,6 +138,7 @@ void n3ds_graphics::DrawTopRenderTarget(uint32_t clearColor)
 {
     C3D_RenderTargetClear(topRenderTarget, C3D_CLEAR_ALL, clearColor, 0);
     C3D_FrameDrawOn(topRenderTarget);
+    RestoreState();
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &topProjection);
 }
 
@@ -121,6 +146,7 @@ void n3ds_graphics::DrawBottomRenderTarget(uint32_t clearColor)
 {
     C3D_RenderTargetClear(bottomRenderTarget, C3D_CLEAR_ALL, clearColor, 0);
     C3D_FrameDrawOn(bottomRenderTarget);
+    RestoreState();
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &bottomProjection);
 }
 
@@ -160,6 +186,18 @@ void n3ds_graphics::DrawQuad(float x, float y, float w, float h, float uvX, floa
     C3D_DrawArrays(GPU_TRIANGLE_STRIP, 0, vertex_list_count);
 }
 
+void n3ds_graphics::DrawQuadMatrix(const C3D_Mtx *modelView, float uvX, float uvY, float uvW, float uvH)
+{
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, modelView);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_uvOffset, uvX, uvY, uvW, uvH);
+    C3D_DrawArrays(GPU_TRIANGLE_STRIP, 0, vertex_list_count);
+}
+
+void n3ds_graphics::SetProjection(const C3D_Mtx *projection)
+{
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, projection);
+}
+
 void n3ds_graphics::CreateTextureObject(C3D_Tex *textureObject, uint16_t width, uint16_t height, GPU_TEXCOLOR format, GPU_TEXTURE_WRAP_PARAM wrap, GPU_TEXTURE_FILTER_PARAM filter)
 {
     bool success = C3D_TexInitVRAM(textureObject, width, height, format);
@@ -182,6 +220,8 @@ void n3ds_graphics::UploadTextureObject(C3D_Tex *textureObject, void *textureDat
 
 void n3ds_graphics::BindTextureObject(C3D_Tex *textureObject, int32_t mapIndex)
 {
+    if (mapIndex == 0)
+        boundTexture = textureObject;
     C3D_TexBind(mapIndex, textureObject);
 }
 
