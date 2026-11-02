@@ -134,7 +134,7 @@ New 3DS-specific code lives in `SpaceCadetPinball/n3ds_*`:
 - **Original game:** Cinematronics / Maxis, published by Microsoft.
 - **Decompilation:** [k4zmu2a](https://github.com/k4zmu2a/SpaceCadetPinball).
 - **3DS port:** [MaikelChan](https://github.com/MaikelChan/SpaceCadetPinball/tree/3ds), with contributions credited in its history.
-- **This fork:** [@imphuoc](https://github.com/imphuochuynh).
+- **This fork:** [@imphuochuynh](https://github.com/imphuochuynh).
 
 MIT licensed, like the projects it's based on (see `LICENSE`). Game data and music are not included and remain the property of their owners.
 
