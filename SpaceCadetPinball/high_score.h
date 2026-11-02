@@ -20,10 +20,12 @@ public:
 	static void show_and_set_high_score_dialog(high_score_struct* table, int score, int pos, LPCSTR defaultName);
 	static void RenderHighScoreDialog();
 
-	// 3DS: scores waiting for a name. Filled at game end, handled between frames
-	// (the system keyboard is an applet and can't open mid-frame).
+	// 3DS: scores waiting for initials, queued at game end and entered one at
+	// a time on screen (n3ds_initials).
 	static bool HasPendingEntry();
-	static void ProcessPendingEntry();
+	// Next score that still makes the table: its rank (1-5) and player label.
+	static bool PopPendingEntry(int* score, int* rank, char* playerLabel, size_t labelSize);
+	static void CommitEntry(int score, const char* name);
 private :
 	struct pending_entry
 	{

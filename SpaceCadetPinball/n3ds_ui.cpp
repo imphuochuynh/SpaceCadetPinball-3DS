@@ -72,8 +72,9 @@ void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_str
 	DrawText("HIGH SCORES", left, 6.0f, 0.5f, ColorHeader, width);
 	C2D_DrawRectSolid(left, 25.0f, 0.5f, width, 1.0f, ColorRule);
 
-	float y = 30.0f;
-	for (int i = 0; i < 5; i++, y += 34.0f)
+	// One row per score: rank, initials, score (right-aligned)
+	float y = 34.0f;
+	for (int i = 0; i < 5; i++, y += 32.0f)
 	{
 		char rank[4];
 		snprintf(rank, sizeof rank, "%d", i + 1);
@@ -81,14 +82,14 @@ void n3ds_ui::DrawBottom(C3D_RenderTarget *target, float x, const high_score_str
 
 		bool empty = table[i].Score <= 0;
 		const char *name = empty || !table[i].Name[0] ? "---" : table[i].Name;
-		DrawText(name, left + 12.0f, y, 0.5f, empty ? ColorDim : ColorName, width - 12.0f);
+		DrawText(name, left + 11.0f, y, 0.5f, empty ? ColorDim : ColorName, 34.0f);
 
 		char score[24];
 		if (empty)
 			strcpy(score, "---");
 		else
 			FormatScore(score, sizeof score, table[i].Score);
-		DrawText(score, right, y + 15.0f, 0.5f, empty ? ColorDim : ColorScore, width - 12.0f, true);
+		DrawText(score, right, y, 0.5f, empty ? ColorDim : ColorScore, width - 50.0f, true);
 	}
 
 	C2D_DrawRectSolid(left, 201.0f, 0.5f, width, 1.0f, ColorRule);

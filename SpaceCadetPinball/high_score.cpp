@@ -6,7 +6,6 @@
 #include "pinball.h"
 #include "score.h"
 
-#include <3ds.h>
 
 int high_score::dlg_enter_name;
 int high_score::dlg_score;
@@ -158,57 +157,35 @@ bool high_score::HasPendingEntry()
 	return !pending.empty();
 }
 
-// Cut a UTF-8 string to fit maxBytes without splitting a character,
-// and drop characters that would break the settings file.
-static void CopyName(char* dst, size_t dstSize, const char* src)
+bool high_score::PopPendingEntry(int* score, int* rank, char* playerLabel, size_t labelSize)
 {
-	size_t len = 0;
-	for (size_t i = 0; src[i] && len < dstSize - 1; )
+	while (!pending.empty())
 	{
-		unsigned char c = static_cast<unsigned char>(src[i]);
-		size_t charLen = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 1;
-		if (len + charLen > dstSize - 1)
-			break;
-		for (size_t k = 0; k < charLen && src[i]; k++, i++)
-		{
-			char ch = src[i];
-			dst[len++] = (ch == '\n' || ch == '\r') ? ' ' : ch;
-		}
+		auto entry = pending.front();
+		pending.erase(pending.begin());
+
+		int position = get_score_position(pb::highscore_table, entry.score);
+		if (position < 0)
+			continue;
+
+		*score = entry.score;
+		*rank = position + 1;
+		snprintf(playerLabel, labelSize, "%s", entry.defaultName);
+		return true;
 	}
-	dst[len] = 0;
+	return false;
 }
 
-void high_score::ProcessPendingEntry()
+void high_score::CommitEntry(int score, const char* name)
 {
-	if (pending.empty())
-		return;
-
-	auto entry = pending.front();
-	pending.erase(pending.begin());
-
 	auto table = pb::highscore_table;
-	int position = get_score_position(table, entry.score);
+	int position = get_score_position(table, score);
 	if (position < 0)
 		return;
 
-	char hint[64];
-	snprintf(hint, sizeof hint, "High score #%d! Enter your name", position + 1);
-
-	char input[96]{};
-	SwkbdState swkbd;
-	swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, 16);
-	swkbdSetHintText(&swkbd, hint);
-	swkbdSetInitialText(&swkbd, entry.defaultName);
-	swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
-	swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Skip", false);
-	swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "OK", true);
-	SwkbdButton button = swkbdInputText(&swkbd, input, sizeof input);
-
-	// Skipping still records the score, under the default "Player N" name.
-	char name[32];
-	CopyName(name, sizeof name, button == SWKBD_BUTTON_CONFIRM && input[0] ? input : entry.defaultName);
-
-	place_new_score_into(table, entry.score, name, position);
+	char safeName[32];
+	snprintf(safeName, sizeof safeName, "%s", name);
+	place_new_score_into(table, score, safeName, position);
 	SaveNow(table);
 }
 

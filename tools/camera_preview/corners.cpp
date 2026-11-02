@@ -22,7 +22,7 @@ static void corners(const char *label, Mode mode, float focus)
 
 int main()
 {
-	for (int m = 0; m < 3; m++)
+	for (int m = 0; m < (int)Mode::Count; m++)
 	{
 		float lo, hi; FocusLimits((Mode)m, &lo, &hi);
 		fprintf(stderr, "%s focus rows %.1f..%.1f\n", ModeName((Mode)m), lo, hi);

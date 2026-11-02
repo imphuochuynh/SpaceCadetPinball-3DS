@@ -19,10 +19,9 @@ namespace n3ds_camera
 {
 	enum class Mode : int
 	{
-		Classic = 0, // whole table, flat, centered
-		Follow = 1,  // zoomed in, flat, tracks the ball
-		Tilted = 2,  // zoomed in, leaned back in perspective, tracks the ball
-		Count = 3,
+		Classic = 0, // whole table, centered
+		Follow = 1,  // zoomed in, tracks the ball
+		Count = 2,
 	};
 
 	constexpr float ScreenWidth = 400.0f;  // top screen, landscape

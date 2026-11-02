@@ -127,7 +127,9 @@ void TPlunger::PullbackTimer(int timerId, void* caller)
 	plunger->Boost += static_cast<float>(plunger->PullbackIncrement);
 	if (plunger->Boost <= static_cast<float>(plunger->MaxPullback))
 	{
-		plunger->PullbackTimer_ = timer::set(plunger->Unknown4F, plunger, PullbackTimer);
+		// 3DS: step every frame. The original 25ms step lands on every second
+		// 60fps frame here (33ms), which made pulling back sluggish.
+		plunger->PullbackTimer_ = timer::set(0.016f, plunger, PullbackTimer);
 	}
 	else
 	{

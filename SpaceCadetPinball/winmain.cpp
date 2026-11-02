@@ -14,6 +14,7 @@
 #include "n3ds_input.h"
 #include "n3ds_camera.h"
 #include "n3ds_ui.h"
+#include "n3ds_initials.h"
 #include "high_score.h"
 #include "proj.h"
 #include "TBall.h"
@@ -167,51 +168,70 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 
 		uint32_t buttonsDown = n3ds_input::GetButtonsDown();
 		uint32_t buttonsUp = n3ds_input::GetButtonsUp();
+		uint32_t buttonsHeld = n3ds_input::GetButtonsHeld();
 
-		if (buttonsDown & KEY_Y)
-			break;
-
-		if (buttonsDown & KEY_START)
-			pause();
-
-		if (buttonsDown & KEY_X)
+		// A finished game may have queued high scores: take initials one at a
+		// time, with the table frozen behind the entry box.
+		bool entering = n3ds_initials::Active();
+		if (!entering && high_score::HasPendingEntry())
 		{
-			new_game();
-			n3ds_camera::Reset(&cameraState, cameraMode);
+			int score, rank;
+			char label[32];
+			if (high_score::PopPendingEntry(&score, &rank, label, sizeof label))
+			{
+				n3ds_initials::Begin(score, rank, label, options::get_string("Last Initials", "AAA").c_str());
+				entering = true;
+				buttonsDown = 0; // don't let this frame's press change a letter
+			}
 		}
 
-		if (buttonsDown & KEY_SELECT)
+		if (entering)
 		{
-			cameraMode = n3ds_camera::NextMode(cameraMode);
-			n3ds_camera::Reset(&cameraState, cameraMode);
-			options::set_int("Camera Mode", static_cast<int>(cameraMode));
-			options::save();
+			if (n3ds_initials::Update(buttonsDown, buttonsHeld))
+			{
+				options::set_string("Last Initials", n3ds_initials::Initials());
+				high_score::CommitEntry(n3ds_initials::Score(), n3ds_initials::Initials()); // also saves
+			}
+			pb::keyup(buttonsUp & (KEY_L | KEY_R)); // let go of flippers held at game over
 		}
-
-		pb::keydown(buttonsDown);
-		pb::keyup(buttonsUp);
-
-		// A finished game may have queued high scores; ask for names now,
-		// between frames, since the system keyboard is a separate applet.
-		if (high_score::HasPendingEntry())
+		else
 		{
-			high_score::ProcessPendingEntry();
-			n3ds_input::ScanPads(); // drop button presses made in the keyboard
-			continue;
-		}
+			if (buttonsDown & KEY_Y)
+				break;
 
-		if (!single_step)
-		{
-			// Update game when not paused
+			if (buttonsDown & KEY_START)
+				pause();
 
-			pb::frame(1000.0f / 60.0f);
+			if (buttonsDown & KEY_X)
+			{
+				new_game();
+				n3ds_camera::Reset(&cameraState, cameraMode);
+			}
 
-			// Swizzle the texture, copy it to render texture and upload
+			if (buttonsDown & KEY_SELECT)
+			{
+				cameraMode = n3ds_camera::NextMode(cameraMode);
+				n3ds_camera::Reset(&cameraState, cameraMode);
+				options::set_int("Camera Mode", static_cast<int>(cameraMode));
+				options::save();
+			}
 
-			SwizzleAndCopy(swizzle, screenTexturePixelCount);
-			n3ds_graphics::UploadTextureObject(&renderTextureObject, renderTextureData);
+			pb::keydown(buttonsDown);
+			pb::keyup(buttonsUp);
 
-			n3ds_camera::Update(&cameraState, cameraMode, LowestBallRow());
+			if (!single_step)
+			{
+				// Update game when not paused
+
+				pb::frame(1000.0f / 60.0f);
+
+				// Swizzle the texture, copy it to render texture and upload
+
+				SwizzleAndCopy(swizzle, screenTexturePixelCount);
+				n3ds_graphics::UploadTextureObject(&renderTextureObject, renderTextureData);
+
+				n3ds_camera::Update(&cameraState, cameraMode, LowestBallRow());
+			}
 		}
 
 		// Texture layout: the game's 600x416 screen sits at the top of the
@@ -239,6 +259,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		n3ds_graphics::DrawTopRenderTarget(0x000000ff);
 		n3ds_graphics::SetProjection(&view.projection);
 		n3ds_graphics::DrawQuadMatrix(&view.modelView, tableUv[0], tableUv[1], tableUv[2], tableUv[3]);
+		n3ds_initials::Draw(n3ds_graphics::GetTopRenderTarget());
 
 		// Render bottom screen: the game's score panel at 1:1, high scores beside it
 

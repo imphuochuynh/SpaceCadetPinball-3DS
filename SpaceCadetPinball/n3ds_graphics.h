@@ -44,6 +44,7 @@ public:
     // Draw the unit quad with an explicit model-view matrix (camera views).
     static void DrawQuadMatrix(const C3D_Mtx *modelView, float uvX, float uvY, float uvW, float uvH);
     static void SetProjection(const C3D_Mtx *projection);
+    static C3D_RenderTarget *GetTopRenderTarget() { return topRenderTarget; }
     static C3D_RenderTarget *GetBottomRenderTarget() { return bottomRenderTarget; }
     static void CreateTextureObject(C3D_Tex *textureObject, uint16_t width, uint16_t height, GPU_TEXCOLOR format, GPU_TEXTURE_WRAP_PARAM wrap, GPU_TEXTURE_FILTER_PARAM filter);
     static void UploadTextureObject(C3D_Tex *textureObject, void *textureData);
