@@ -51,10 +51,10 @@ static const char *BitName(int bit)
 	case 25: return "C-Stick Left";
 	case 26: return "C-Stick Up";
 	case 27: return "C-Stick Down";
-	case 28: return "Circle Pad Right";
-	case 29: return "Circle Pad Left";
-	case 30: return "Circle Pad Up";
-	case 31: return "Circle Pad Down";
+	case 28: return "C-Pad Right";
+	case 29: return "C-Pad Left";
+	case 30: return "C-Pad Up";
+	case 31: return "C-Pad Down";
 	default: return "?";
 	}
 }

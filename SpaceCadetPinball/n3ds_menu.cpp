@@ -6,6 +6,7 @@
 
 #include "high_score.h"
 #include "n3ds_controls.h"
+#include "n3ds_font.h"
 #include "options.h"
 #include "pb.h"
 
@@ -57,17 +58,15 @@ namespace
 	int highlight = 0;          // index into the current page's layout
 	int capturing = -1;         // controls page: action waiting for a button
 	bool playersChanged = false;
-	C2D_TextBuf textBuf = nullptr;
 
 	const u32 ColorBg = C2D_Color32(0x10, 0x14, 0x18, 0xFF);
 	const u32 ColorButton = C2D_Color32(0x1B, 0x21, 0x30, 0xFF);
 	const u32 ColorButtonHot = C2D_Color32(0x24, 0x30, 0x49, 0xFF);
 	const u32 ColorAccent = C2D_Color32(0x8F, 0xB8, 0xFF, 0xFF);
-	const u32 ColorText = C2D_Color32(0xE8, 0xE8, 0xF0, 0xFF);
-	const u32 ColorMuted = C2D_Color32(0x7A, 0x80, 0x90, 0xFF);
-	const u32 ColorDanger = C2D_Color32(0xFF, 0x7A, 0x7A, 0xFF);
+	const u32 ColorRule = C2D_Color32(0x2C, 0x32, 0x40, 0xFF);
+	const u32 ColorDanger = C2D_Color32(0xFF, 0x50, 0x50, 0xFF);
+	const u32 ColorChanged = C2D_Color32(0xFF, 0xD2, 0x4A, 0xFF);
 	const u32 ColorDim = C2D_Color32(0x00, 0x00, 0x00, 0xA8);
-	const u32 ColorWhite = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF);
 
 	Layout BuildLayout(Page p)
 	{
@@ -218,14 +217,6 @@ namespace
 
 	// ---- Drawing --------------------------------------------------------------
 
-	void Text(const char *str, float x, float y, float scale, u32 color, u32 align = C2D_AlignLeft)
-	{
-		C2D_Text text;
-		C2D_TextParse(&text, textBuf, str);
-		C2D_TextOptimize(&text);
-		C2D_DrawText(&text, C2D_WithColor | align, x, y, 0.5f, scale, scale, color);
-	}
-
 	void Frame(float x, float y, float w, float h, u32 color, float t)
 	{
 		C2D_DrawRectSolid(x, y, 0.5f, w, t, color);
@@ -234,12 +225,13 @@ namespace
 		C2D_DrawRectSolid(x + w - t, y, 0.5f, t, h, color);
 	}
 
-	void DrawButton(const Button &b, bool hot, const char *label, u32 color)
+	// tint: 0 for the font's own colors, or a color to blend the label toward
+	void DrawButton(const Button &b, bool hot, const char *label, u32 tint = 0)
 	{
 		C2D_DrawRectSolid(b.x, b.y, 0.5f, b.w, b.h, hot ? ColorButtonHot : ColorButton);
-		if (hot)
-			Frame(b.x, b.y, b.w, b.h, ColorAccent, 2.0f);
-		Text(label, b.x + b.w / 2, b.y + b.h / 2 - 9.0f, 0.55f, color, C2D_AlignCenter);
+		Frame(b.x, b.y, b.w, b.h, hot ? ColorAccent : ColorRule, hot ? 2.0f : 1.0f);
+		n3ds_font::Draw(label, b.x + b.w / 2, b.y + (b.h - n3ds_font::Height) / 2, 1.0f, n3ds_font::Center,
+		                b.w - 12.0f, 1.0f, tint, tint ? 0.6f : 0.0f);
 	}
 }
 
@@ -309,21 +301,17 @@ void n3ds_menu::DrawTop(C3D_RenderTarget *target)
 {
 	if (!open)
 		return;
-	if (!textBuf)
-		textBuf = C2D_TextBufNew(1024);
-	C2D_TextBufClear(textBuf);
 	C2D_Prepare();
 	C2D_SceneBegin(target);
 
 	C2D_DrawRectSolid(0, 0, 0.5f, 400, 240, ColorDim);
-	Text("PAUSED", 200, 100, 1.0f, ColorWhite, C2D_AlignCenter);
+	n3ds_font::Draw("PAUSED", 200, 98, 2.0f, n3ds_font::Center);
 }
 
 void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, bool demoActive)
 {
 	if (!open)
 		return;
-	// DrawTop cleared the text buffer this frame; keep adding to it.
 	C2D_Prepare();
 	C2D_SceneBegin(target);
 	C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, ColorBg);
@@ -337,7 +325,7 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 		for (int i = 0; i < l.count; i++)
 		{
 			const Button &b = l.buttons[i];
-			u32 color = ColorText;
+			u32 tint = 0;
 			switch (b.id)
 			{
 			case BtnResume: snprintf(label, sizeof label, "Resume"); break;
@@ -345,24 +333,23 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 			case BtnPlayers:
 				snprintf(label, sizeof label, "Players: %d", options::Options.Players);
 				if (playersChanged)
-					color = ColorAccent; // takes effect as a new game on resume
+					tint = ColorChanged; // takes effect as a new game on resume
 				break;
-			case BtnCamera: snprintf(label, sizeof label, "Camera: %s", cameraName); break;
+			case BtnCamera: snprintf(label, sizeof label, "View: %s", cameraName); break;
 			case BtnSound: snprintf(label, sizeof label, "Sound: %s", options::Options.Sounds ? "On" : "Off"); break;
 			case BtnMusic: snprintf(label, sizeof label, "Music: %s", options::Options.Music ? "On" : "Off"); break;
 			case BtnControls: snprintf(label, sizeof label, "Controls"); break;
 			case BtnDemo: snprintf(label, sizeof label, demoActive ? "Stop Demo" : "Demo"); break;
 			case BtnResetScores: snprintf(label, sizeof label, "Reset Scores"); break;
-			case BtnQuit: snprintf(label, sizeof label, "Quit"); color = ColorDanger; break;
+			case BtnQuit: snprintf(label, sizeof label, "Quit"); tint = ColorDanger; break;
 			}
-			DrawButton(b, i == highlight, label, color);
+			DrawButton(b, i == highlight, label, tint);
 		}
 		break;
 
 	case Page::Controls:
-		Text("CONTROLS", 12, 6, 0.55f, ColorAccent);
-		Text(capturing >= 0 ? "Press a button  \xC2\xB7  START cancels" : "Tap an action to change its button",
-		     308, 9, 0.4f, ColorMuted, C2D_AlignRight);
+		n3ds_font::Draw("CONTROLS", 12, 4, 1.0f);
+		n3ds_font::Draw(capturing >= 0 ? "START: CANCEL" : "TAP TO CHANGE", 308, 4, 1.0f, n3ds_font::Right, 0.0f, 0.6f);
 		for (int i = 0; i < l.count; i++)
 		{
 			const Button &b = l.buttons[i];
@@ -374,13 +361,15 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 				C2D_DrawRectSolid(b.x, b.y, 0.5f, b.w, b.h, hot || waiting ? ColorButtonHot : ColorButton);
 				if (hot || waiting)
 					Frame(b.x, b.y, b.w, b.h, ColorAccent, waiting ? 2.0f : 1.0f);
-				Text(n3ds_controls::ActionName(action), b.x + 10, b.y + 4, 0.5f, ColorText);
-				Text(waiting ? "Press a button..." : n3ds_controls::KeyName(action),
-				     b.x + b.w - 10, b.y + 4, 0.5f, waiting ? ColorAccent : ColorMuted, C2D_AlignRight);
+				float ty = b.y + (b.h - n3ds_font::Height) / 2;
+				n3ds_font::Draw(n3ds_controls::ActionName(action), b.x + 8, ty, 1.0f);
+				n3ds_font::Draw(waiting ? "Press a button" : n3ds_controls::KeyName(action),
+				                b.x + b.w - 8, ty, 1.0f, n3ds_font::Right, 150.0f, waiting ? 1.0f : 0.6f,
+				                waiting ? ColorChanged : 0, waiting ? 0.5f : 0.0f);
 			}
 			else
 			{
-				DrawButton(b, hot, b.id == BtnDefaults ? "Defaults" : "Back", ColorText);
+				DrawButton(b, hot, b.id == BtnDefaults ? "Defaults" : "Back");
 			}
 		}
 		break;
@@ -389,13 +378,13 @@ void n3ds_menu::DrawBottom(C3D_RenderTarget *target, const char *cameraName, boo
 	case Page::ConfirmQuit:
 	{
 		bool quit = page == Page::ConfirmQuit;
-		Text(quit ? "Quit Space Cadet Pinball?" : "Reset all high scores?", 160, 80, 0.65f, ColorText, C2D_AlignCenter);
-		Text(quit ? "Your scores and settings are saved." : "This can't be undone.", 160, 108, 0.45f, ColorMuted, C2D_AlignCenter);
+		n3ds_font::Draw(quit ? "Quit Space Cadet?" : "Reset all high scores?", 160, 72, 1.0f, n3ds_font::Center, 300.0f);
+		n3ds_font::Draw(quit ? "Scores and settings are saved" : "This can't be undone", 160, 104, 1.0f, n3ds_font::Center, 300.0f, 0.6f);
 		for (int i = 0; i < l.count; i++)
 		{
 			const Button &b = l.buttons[i];
 			bool confirm = b.id == BtnConfirm;
-			DrawButton(b, i == highlight, confirm ? (quit ? "Quit" : "Reset") : "Cancel", confirm ? ColorDanger : ColorText);
+			DrawButton(b, i == highlight, confirm ? (quit ? "Quit" : "Reset") : "Cancel", confirm ? ColorDanger : 0);
 		}
 		break;
 	}

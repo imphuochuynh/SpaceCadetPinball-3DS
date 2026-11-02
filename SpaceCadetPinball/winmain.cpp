@@ -16,6 +16,7 @@
 #include "n3ds_ui.h"
 #include "n3ds_initials.h"
 #include "n3ds_menu.h"
+#include "n3ds_font.h"
 #include "n3ds_controls.h"
 #include "high_score.h"
 #include "proj.h"
@@ -154,6 +155,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	// Camera and bottom-screen UI
 
 	n3ds_ui::Initialize();
+	n3ds_font::Initialize(); // packs the game's message font into a texture
 
 	auto cameraMode = static_cast<n3ds_camera::Mode>(options::get_int("Camera Mode", static_cast<int>(n3ds_camera::Mode::Follow)));
 	if (static_cast<int>(cameraMode) < 0 || cameraMode >= n3ds_camera::Mode::Count)
@@ -301,6 +303,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		// Render top screen: the table, through the camera
 
 		n3ds_graphics::BeginRender(IsNew3DS ? true : single_step);
+		n3ds_font::BeginFrame();
 
 		n3ds_camera::View view;
 		n3ds_camera::Compute(cameraMode, cameraState,
@@ -312,7 +315,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		n3ds_graphics::DrawTopRenderTarget(0x000000ff);
 		n3ds_graphics::SetProjection(&view.projection);
 		n3ds_graphics::DrawQuadMatrix(&view.modelView, tableUv[0], tableUv[1], tableUv[2], tableUv[3]);
-		n3ds_initials::Draw(n3ds_graphics::GetTopRenderTarget());
+		n3ds_initials::DrawTop(n3ds_graphics::GetTopRenderTarget());
 		n3ds_menu::DrawTop(n3ds_graphics::GetTopRenderTarget());
 
 		// Render bottom screen: the game's score panel at 1:1, high scores beside it
@@ -341,7 +344,9 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			panelH,
 			panelUv[0], panelUv[1], panelUv[2], panelUv[3]);
 
-		if (n3ds_menu::IsOpen())
+		if (n3ds_initials::Active())
+			n3ds_initials::DrawBottom(n3ds_graphics::GetBottomRenderTarget());
+		else if (n3ds_menu::IsOpen())
 			n3ds_menu::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), n3ds_camera::ModeName(cameraMode), DemoActive);
 		else
 			n3ds_ui::DrawBottom(n3ds_graphics::GetBottomRenderTarget(), panelW, pb::highscore_table,
@@ -358,6 +363,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	midi::music_shutdown();
 	Sound::Close();
 
+	n3ds_font::Dispose();
 	n3ds_ui::Dispose();
 
 	delete[] swizzle;
