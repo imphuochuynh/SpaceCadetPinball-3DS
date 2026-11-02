@@ -289,3 +289,4 @@ romfs/*
 # CI
 .tools/
 makerom.args
+__pycache__/
