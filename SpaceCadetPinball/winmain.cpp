@@ -258,6 +258,15 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		}
 		else
 		{
+			// Game over ("X Starts New Game"): X starts a new game. Only in that
+			// state, so X stays free to remap for play.
+			if ((buttonsDown & KEY_X) && pb::game_mode == 2 && !single_step && !n3ds_menu::IsOpen())
+			{
+				new_game();
+				n3ds_camera::Reset(&cameraState, cameraMode);
+				buttonsDown &= ~KEY_X;
+			}
+
 			// Start, or a tap on the "START Menu" corner, opens the menu and pauses
 			bool openMenu = buttonsDown & KEY_START;
 			if ((buttonsDown & KEY_TOUCH) && !n3ds_menu::IsOpen())
