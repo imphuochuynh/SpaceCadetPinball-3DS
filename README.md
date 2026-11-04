@@ -57,6 +57,7 @@ It's built on [k4zmu2a's decompilation](https://github.com/k4zmu2a/SpaceCadetPin
 | Nudge left / right / up | D-Pad Left / Right / Up |
 | Menu (pauses) | Start, or tap the ☰ corner |
 | Switch view (Follow / Classic) | Select |
+| New game (on the game-over screen) | X |
 
 Flippers, plunger and nudges can be remapped in **Menu → Controls**.
 
