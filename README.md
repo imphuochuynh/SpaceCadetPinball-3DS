@@ -44,10 +44,7 @@ The table fills the top screen, and a camera follows the ball as it moves. The b
 
 ### 1. Download the game
 
-1. Open this repository's **Actions** tab on GitHub. You need to be signed in.
-2. Click the most recent run that has a green check mark.
-3. Scroll down to **Artifacts** and download the file there.
-4. Unzip it. Inside is `SpaceCadetPinball.cia`, which is the game.
+Go to this repository's [**Releases**](https://github.com/imphuochuynh/SpaceCadetPinball-3DS/releases/latest) page and download **`SpaceCadetPinball.cia`**. That's the game.
 
 ### 2. Copy the files to your SD card
 
