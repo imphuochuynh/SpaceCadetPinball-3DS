@@ -6,6 +6,23 @@ It's built on [k4zmu2a's decompilation](https://github.com/k4zmu2a/SpaceCadetPin
 
 **Status:** complete. This is a personal project, released as is. It does what I wanted, and I'm not planning further updates or support.
 
+## Screenshots
+
+<table>
+  <tr>
+    <th>Playing (Follow view)</th>
+    <th>Paused</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/play-top.jpg" width="400" alt="Top screen: the table zoomed in, following the ball"></td>
+    <td align="center"><img src="screenshots/menu-top.jpg" width="400" alt="Top screen: the table dimmed while paused"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/play-bottom.jpg" width="320" alt="Bottom screen: score panel and top 3 high scores in the game's dot-matrix font"></td>
+    <td align="center"><img src="screenshots/menu-bottom.jpg" width="320" alt="Bottom screen: the touch menu"></td>
+  </tr>
+</table>
+
 ## Features
 
 **Top screen: the table**
